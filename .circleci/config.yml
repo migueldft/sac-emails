@@ -1,0 +1,53 @@
+version: 2.1
+
+orbs:
+    aws-cli: circleci/aws-cli@3.1.1
+    python: circleci/python@2.0.3
+    slack: circleci/slack@4.10.1
+
+jobs:
+    build-and-push:
+        executor: aws-cli/default
+        steps:
+            - checkout
+            - aws-cli/setup
+            - setup_remote_docker:
+                docker_layer_caching: true
+            - run:
+                name: Build Image and Push to ECR
+                command: make build-and-push
+    create-training-job:
+        executor: python/default
+        steps:
+            - checkout
+            - python/install-packages:
+                pkg-manager: pip
+            - run:
+                name: Create Training Job
+                command: make create-training-job
+    deploy-model:
+        executor: python/default
+        steps:
+            - checkout
+            - python/install-packages:
+                pkg-manager: pip
+            - run:
+                name: Deploy Model
+                command: make deploy-model
+            - slack/notify:
+                event: fail
+                template: basic_fail_1
+            - slack/notify:
+                event: pass
+                template: basic_success_1
+
+workflows:
+    main-workflow:
+        jobs:
+            - build-and-push
+            - create-training-job
+                requires:
+                    - build-and-push
+            - deploy-model
+                requires:
+                    - create-training-job
